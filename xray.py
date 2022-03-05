@@ -51,7 +51,6 @@ class ISODBF3003:
         self.port.write(b'RP\r')
         print(str(int(self.port.read_until(b'\r')[1:-1])) + " watts")
 
-    # Receive and parse timer data
     def read_timer(self, num : list):
         try:
             int(num[0])
@@ -108,27 +107,23 @@ class ISODBF3003:
 
     def set_kv(self, data : list):
         try:
-            int(data[0])
+            data[0] = str(int(data[0])).zfill(2)
         except:
             raise ValueError("kV given in incorrect format")
-        if(len(data) != 1):
+        if(len(data) != 1 or len(data[0]) != 2):
             raise ValueError("kV given in incorrect format")
-        if len(data[0]) != 2:
-            data[0] = "0" + data[0]
-
+        
         self.port.write(b'SV:' + data[0].encode("ASCII") + b'\r')
         print("kV written to device. Current values are:")
         self.read_kvma()
 
     def set_ma(self, data : list):
         try:
-            int(data[0])
+            data[0] = str(int(data[0])).zfill(2)
         except:
             raise ValueError("mA given in incorrect format")
-        if(len(data) != 1):
+        if(len(data) != 1 or len(data[0]) != 2):
             raise ValueError("mA given in incorrect format")
-        if len(data[0]) != 2:
-            data[0] = "0" + data[0]
 
         self.port.write(b'SC:' + data[0].encode("ASCII") + b'\r')
         print("mA written to device. Current values are:")
@@ -136,15 +131,11 @@ class ISODBF3003:
 
     def set_kvma(self, data : list):
         try:
-            int(data[0])
-            int(data[1])
+            data = [str(int(d)).zfill(2) for d in data]        
         except:
             raise ValueError("Data given in incorrect format")
-        if(len(data) != 2):
+        if(len(data) != 2 or len(data[0]) != 2 or len(data[1]) != 2):
             raise ValueError("Data given in incorrect format")
-        for d in data:
-            if len(d) != 2:
-                d = "0" + d
 
         self.port.write(b'SN:' + ",".join(data).encode("ASCII") + b'\r')
         print("kV and mA written to device. Current values are:")
@@ -152,13 +143,11 @@ class ISODBF3003:
 
     def set_power(self, data : list):
         try:
-            int(data[0])
+            data[0] = str(int(data[0])).zfill(4)
         except:
             raise ValueError("W given in incorrect format")
-        if(len(data) != 1):
+        if(len(data) != 1 or len(data[0] != 4)):
             raise ValueError("W given in incorrect format")
-        if len(data[0]) != 4:
-            data[0] = str(int(data[0])).zfill(4)
 
         self.port.write(b'SP:' + data[0].encode("ASCII") + b'\r')
         print("W written to device. Current value is:")
@@ -166,25 +155,18 @@ class ISODBF3003:
 
     def set_timer(self, data : list):
         try:
-            int(data[0])
-            int(data[1])
-            int(data[2])
-            int(data[3])
+            data[0] = str(int(data[0])).zfill(1)
+            data[1:3] = [str(int(d)).zfill(2) for d in data[1:3]]
         except:
             raise ValueError("Time data given in incorrect format")
-        if(len(data) != 4):
+        if(len(data) != 4 or [len(d) for d in data] != [1, 2, 2, 2]):
             raise ValueError("Time data given in incorrect format")
-        if(len(data[0]) != 1):
-            raise ValueError("Time data given in incorrect format")
-        for d in data[1:3]:
-            if len(d) != 2:
-                d = "0" + d
 
         self.port.write(b'TP:' + ",".join(data).encode("ASCII") + b'\r')
-        print("Data written to device. Current values are:")
+        print("Timer " + data[1] + " written to device. Current values are:")
         self.read_timer(data[0:1])
 
-    def set_material(self, num : list):
+    def set_material(self, data : list):
         mat = {
                 'ti': b'1',
                 'cr': b'2',
@@ -196,22 +178,14 @@ class ISODBF3003:
                 'w': b'8',
                 'au': b'9'
             }
-        try:
-            int(num[1])
-        except:
-            raise ValueError("Material data given in incorrect format")
-        if(len(num) != 2):
-            raise ValueError("Material data given in incorrect format")
-        if(num[0].lower() not in mat):
-            raise ValueError("Material data given in incorrect format")
-        if(len(num[1]) != 1):
+        if(len(data) != 1 or data[0].lower() not in mat):
             raise ValueError("Material data given in incorrect format")
 
-        self.port.write(b'SM:' + mat[num[0].lower()] + b'\r')
+        self.port.write(b'SM:' + mat[data[0].lower()] + b'\r')
         print("Material selected. Current material is:")
         self.read_material()
 
-    # No idea whether it works the way it's supposed to
+    # Manual says to send only one byte, but always specifies to send numbers in decimal format. No idea whether my function should work.
     def set_focus(self, data : list):
         foc = {
             "0.15 x 8 mm" : b'01',
@@ -241,11 +215,7 @@ class ISODBF3003:
             int(num[1])
         except:
             raise ValueError("Timer data given in incorrect format")
-        if(len(num) != 2):
-            raise ValueError("Timer data given in incorrect format")
-        if(len(num[1]) != 1):
-            raise ValueError("Timer data given in incorrect format")
-        if(num[0].lower() not in {"on", "off"}):
+        if(len(num) != 2 or num[0].lower() not in {"on", "off"} or len(num[1]) != 1):
             raise ValueError("Timer data given in incorrect format")
 
         if(num[0].lower() == "on"):
@@ -253,13 +223,7 @@ class ISODBF3003:
         elif(num[0].lower() == "off"):
             self.port.write(b'TE:' + num[1].encode("ASCII") + b'\r')            
 
-    def toggle_shutter(self, num : list):
-        try:
-            int(num[0])
-        except:
-            print("Error, shutting down voltage for safety:")
-            self.port.write(b'HV:0\r')            
-            raise ValueError("Shutter data given in incorrect format")
+    def toggle_voltage(self, num : list):
         if(len(num) != 1 or num[0].lower() not in {"on", "off"}):
             print("Error, shutting down voltage for safety:")
             self.port.write(b'HV:0\r')            
@@ -270,16 +234,12 @@ class ISODBF3003:
         elif(num[0].lower() == "off"):
             self.port.write(b'HV:0\r')            
 
-    def toggle_voltage(self, num : list):
+    def toggle_shutter(self, num : list):
         try:
             int(num[1])
         except:
             raise ValueError("Voltage data given in incorrect format")
-        if(len(num) != 2):
-            raise ValueError("Voltage data given in incorrect format")
-        if(len(num[1]) != 1):
-            raise ValueError("Voltage data given in incorrect format")
-        if(num[0].lower() not in {"close", "open"}):
+        if(len(num) != 2 or num[0].lower() not in {"open", "close"} or len(num[1]) != 1):
             raise ValueError("Voltage data given in incorrect format")
 
         if(num[0].lower() == "close"):
