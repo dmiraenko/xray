@@ -3,7 +3,7 @@ from prompt_toolkit.completion import NestedCompleter
 import serial
 import serial.tools.list_ports as port_list
 
-class ISODBF3003:
+class DBF3003:
     port = None
 
     def make_command(self):
@@ -103,6 +103,41 @@ class ISODBF3003:
 
         self.port.write(b'RF\r')
         print(foc[int(self.port.read_until(b'\r')[1:-1])] + " focus")
+
+    def read_tube(self, data : list):
+        self.port.write(b'XC:\r')
+        num = int(self.port.read_until(b'\r')[1:-1])
+        self.port.write(b'WT:\r')
+        warmup = int(self.port.read_until(b'\r')[1:-1])
+        self.port.write(b'RH\r')
+        time = self.port.read_until(b'\r')[1:-1]
+
+        print(f"Selected tube: {num}")
+        # Is remaining warm-up time given in seconds or what?
+        print(f"Warm-up time left: {warmup}")
+        print(f"Elapsed operating hours of current tube: {int(time[:-2])} h {int(int(time[-2:]) * 0.6)} m {int(int(time[-2:]) * 36) // 60} s")
+
+    def read_waterflow(self, empty = []):
+        self.port.write(b'SR:14\r')
+        minflow = int(self.port.read_until(b'\r')[1:-1])
+        self.port.write(b'SR:15\r')
+        flow = int(self.port.read_until(b'\r')[1:-1])
+
+        print(f"Minimum water flow rate: {minflow} Hz")
+        print(f"Current water flow rate: {flow} Hz")
+
+    def read_status(self, empty = []):
+        sw1 = [
+            ["External control disabled", "External control enabled"],
+            ["High voltage OFF", "High voltage OFF"],
+            ["Cooling circuit OK", "Cooling circuit NOT OK"],
+            ["Buffer battery OK", "Buffer battery EMPTY"],
+            ["mA setpoint = actual", "mA setpoint =/= actual"],
+            ["kV setpoint = actual", "kV setpoint =/= actual"],
+            ["Shutter OK", "Shutter NOT OK"],
+        ]
+        self.port.write(b'SR:01')
+        ans = bin(int(self.port.read_until(b'\r')[1:-1]))[2:]
 
 
     def set_kv(self, data : list):
@@ -210,6 +245,50 @@ class ISODBF3003:
         print("Data written to device. Current value is:")
         self.read_focus()
 
+    def set_tube(self, num : list):
+        try:
+            int(num[0])
+        except:
+            raise ValueError("Tube number given in incorrect format")
+        if(len(num) != 1 or len(num[0]) != 1):
+            raise ValueError("Tube number given in incorrect format")
+
+        self.port.write(b'CT:' + num[0].encode("ASCII") + b'\r')
+        print("Tube number selected current values are:")
+        self.read_tube()
+
+    def set_warmup(self, data : list):
+        wu = {
+            "none" : "0",
+            "24h" : "1",
+            "48h" : "2",
+            "week" : "3",
+            "rtc" : "4"
+        }
+        try:
+            data[1] = str(int(data[0])).zfill(2)
+        except:
+            raise ValueError("Warmup data given in incorrect format")
+        if(len(data) != 2 or data[0].lower() not in wu or len(data[1]) != 2):
+            raise ValueError("Warmup data given in incorrect format")
+
+        data[0] = wu[data[0].lower()]
+        self.port.write(b'WU:' + ",".join(data).encode("ASCII") + b'\r')
+        print("Tube number selected. Current values are:")
+        self.read_tube()
+
+    def set_waterflow(self, num : list):
+        try:
+            num[0] = str(int(num[0])).zfill(3)
+        except:
+            raise ValueError("Water flow data given in incorrect format")
+        if(len(num) != 1 or len(num[0]) != 3):
+            raise ValueError("Water flow data given in incorrect format")
+
+        self.port.write(b'SW:14:' + num[0].encode('ASCII') + b'\r')
+        print("Water flow data written to device. Updated values are:")
+        self.read_waterflow()
+
     def toggle_timer(self, num : list):
         try:
             int(num[1])
@@ -257,32 +336,36 @@ class ISODBF3003:
 
     commands = {
         'set': {
-            'ma': set_ma,
             'kv': set_kv,
+            'ma': set_ma,
             'kvma': set_kvma,
             'timer': set_timer,
-            'status': 'SW:',
-            'power': 'SP:',
+            'power': set_power,
             'focus': set_focus,
             'material': set_material,
             'language': 'LS:',
             'date': 'DS',
-            'port': set_port
+            'port': set_port,
+            'tube' : set_tube,
+            'warmup' : set_warmup,
+            'waterflow' : set_waterflow
         },
         'read': {
             'kvma': read_kvma,
             'timer': read_timer,
             'msg': 'SR:',
-            'power': 'RP',
-            'material': read_material
+            'power': read_power,
+            'material': read_material,
+            'tube' : read_tube,
+            'focus' : read_focus,
+            'waterflow' : read_waterflow,
+            'date': 'DR'
         },
         'timer': toggle_timer,
         'shutter': toggle_shutter,
-        'date': 'DR',
-        'warm_up': 'WU:',
-        'id': 'ID:',
         'voltage': toggle_voltage,
-        'tube_worktime': 'RH',
+        'status' : read_status,
+        'id': 'ID:',
         'stop': cmdstop
     }
 
@@ -292,7 +375,6 @@ class ISODBF3003:
             'kv': None,
             'kvma': None,
             'timer': None,
-            'status': None,
             'power': None,
             'focus': None,
             'material': {
@@ -321,7 +403,16 @@ class ISODBF3003:
                 "1 x 1 mm" : None,
                 "2 x 1.2 mm" : None
             },
+            'warmup' : {
+                'none' : None,
+                '24h' : None,
+                '48h' : None,
+                'week' : None,
+                'RTC' : None
+            },
+            'waterflow' : None,
             'language': None,
+            'tube' : None,
             'date': None,
             'port': None
         },
@@ -330,7 +421,9 @@ class ISODBF3003:
             'timer': None,
             'msg': None,
             'power': None,
-            'material': None
+            'focus' : None,
+            'material': None,
+            'waterflow' : None
         },
         'timer':{
             'on': None,
@@ -340,18 +433,18 @@ class ISODBF3003:
             'open': None,
             'close': None
         },
-        'date': None,
-        'warm_up': None,
-        'id': None,
         'voltage': {
             'on' : None,
             'off' : None
         },
-        'tube_worktime': None,
+        'status' : None,
+        'date': None,
+        'warm_up': None,
+        'id': None,
         'stop': None
     })
 
-a = ISODBF3003()
+a = DBF3003()
 try:
     while True:
         a.make_command()
