@@ -119,26 +119,112 @@ class DBF3003:
 
     def read_waterflow(self, empty = []):
         self.port.write(b'SR:14\r')
-        minflow = int(self.port.read_until(b'\r')[1:-1])
+        minflow = int(self.port.read_until(b'\r')[-4:-1])
         self.port.write(b'SR:15\r')
-        flow = int(self.port.read_until(b'\r')[1:-1])
+        flow = int(self.port.read_until(b'\r')[-4:-1])
 
         print(f"Minimum water flow rate: {minflow} Hz")
         print(f"Current water flow rate: {flow} Hz")
 
     def read_status(self, empty = []):
-        sw1 = [
-            ["External control disabled", "External control enabled"],
-            ["High voltage OFF", "High voltage OFF"],
-            ["Cooling circuit OK", "Cooling circuit NOT OK"],
-            ["Buffer battery OK", "Buffer battery EMPTY"],
-            ["mA setpoint = actual", "mA setpoint =/= actual"],
-            ["kV setpoint = actual", "kV setpoint =/= actual"],
-            ["Shutter OK", "Shutter NOT OK"],
-        ]
-        self.port.write(b'SR:01')
-        ans = bin(int(self.port.read_until(b'\r')[1:-1]))[2:]
+        st = {"01" : {
+                0 : ["External control disabled", "External control enabled"],
+                1 : ["High voltage OFF", "High voltage OFF"],
+                2 : ["Cooling circuit OK", "Cooling circuit NOT OK"],
+                3 : ["Buffer battery OK", "Buffer battery EMPTY"],
+                4 : ["mA setpoint = actual", "mA setpoint =/= actual"],
+                5 : ["kV setpoint = actual", "kV setpoint =/= actual"],
+                6 : ["Shutter OK", "Shutter NOT OK"]
+            },
+            "03" : {
+                0 : ["Timer 1 OFF", "Timer 1 ON"],
+                1 : ["Timer 2 OFF", "Timer 2 ON"],
+                2 : ["Timer 3 OFF", "Timer 3 ON"],
+                3 : ["Timer 4 OFF", "Timer 4 ON"],
+                4 : ["Shutter 1 MANUAL control", "Shutter 1 COMPUTER control"],
+                5 : ["Shutter 2 MANUAL control", "Shutter 2 COMPUTER control"],
+                6 : ["Shutter 3 MANUAL control", "Shutter 3 COMPUTER control"],
+                7 : ["Shutter 4 MANUAL control", "Shutter 4 COMPUTER control"]
+            },
+            "04" : {
+                0 : ["Shutter 1 command CLOSE", "Shutter 1 command OPEN"],
+                1 : ["Shutter 1 CLOSED", "Shutter 1 OPEN"],
+                2 : ["Shutter 1 NOT closed non-systematically", "Shutter 1 closed non-systematically"],
+                3 : ["Shutter 1 CONNECTED", "Shutter 1 NOT CONNECTED"],
+                4 : ["Shutter 2 command CLOSE", "Shutter 2 command OPEN"],
+                5 : ["Shutter 2 CLOSED", "Shutter 2 OPEN"],
+                6 : ["Shutter 2 NOT closed non-systematically", "Shutter 2 closed non-systematically"],
+                7 : ["Shutter 2 CONNECTED", "Shutter 2 NOT CONNECTED"]
+            },
+            # No documentation for status word "05". Presumably, it is like "04", but for shutters 3 & 4. I provide this here.
+            "05" : {
+                0 : ["Shutter 3 command CLOSE", "Shutter 3 command OPEN"],
+                1 : ["Shutter 3 CLOSED", "Shutter 3 OPEN"],
+                2 : ["Shutter 3 NOT closed non-systematically", "Shutter 3 closed non-systematically"],
+                3 : ["Shutter 3 CONNECTED", "Shutter 3 NOT CONNECTED"],
+                4 : ["Shutter 4 command CLOSE", "Shutter 4 command OPEN"],
+                5 : ["Shutter 4 CLOSED", "Shutter 4 OPEN"],
+                6 : ["Shutter 4 NOT closed non-systematically", "Shutter 4 closed non-systematically"],
+                7 : ["Shutter 4 CONNECTED", "Shutter 4 NOT CONNECTED"]
+            },
+            "06" : {
+                4 : ["Warm-up program NOT ACTIVE", "Warm-up program ACTIVE"],
+                5 : ["Warm-up NOT ABORTED", "Warm-up ABORTED"],
+                6 : ["Warm-up NOT via external computer", "Warm-up via external computer"],
+                7 : ["Warm-up NOT via keyboard", "Warm-up via keyboard"]
+            }
+        }
+        sw12 = {
+            33 : "Cooling system failed",
+            37 : "Absolute undervoltage monitoring",
+            38 : "Absolute overvoltage monitoring",
+            39 : "Absolute undercurrent monitoring",
+            43 : "Extern Stop",
+            46 : "EMERGENCY-STOP",
+            49 : "Preselection exceeding rated power",
+            50 : "Tube overpower",
+            51 : "Preselection out of range",
+            52 : "Presel. exceeding rated generator current",
+            53 : "High voltage lamp defective",
+            55 : "Relative overcurrent monitoring",
+            56 : "Relative undervoltage monitoring",
+            60 : "Relative undercurrent monitoring",
+            63 : "Door contact 1 and 2 open",
+            64 : "Door contact 1 open",
+            65 : "Door contact 2 open",
+            67 : "Temp. supervision cooling system",
+            70 : "Tube to be warmed up?",
+            72 : "Preselection out of range.",
+            76 : "—— Stand-by ——-",
+            80 : "Temperature supervision power module",
+            86 : "HV contactor faulty",
+            90 : "Fault in filament circuit",
+            91 : "Buffer battery emptyr",
+            96 : "Shutter non-systematically closed",
+            97 : "Shutter not connected",
+            98 : "Shutter not opened",
+            99 : "Shutter not closed",
+            104 : "External warning lamp failed",
+            105 : "Temperature supervision generator",
+            106 : "Warm-up necessary",
+            108 : "Power fail (low voltage)",
+            109 : "Warm-up! 0=No",
+            112 : "Shutter safety circuit open",
+            113 : "Absolute overcurrent monitoring",
+            114 : "Relative overvoltage monitoring",
+            116 : "Warm-up terminated after 3 attempts",
+            117 : "Warm-up aborted. Try again",
+            118 : "Push START Button"
+        }
 
+        for s in st:
+            self.port.write(b'SR:' + s.encode("ASCII") + b'\r')
+            ans = bin(int(self.port.read_until(b'\r')[-4:-1]))[2:]
+            for n in st[s]:
+                print(st[s][n][int(ans(n))])
+        
+        self.port.write(b'SR:12\r')
+        print(sw12[int(self.port.read_until(b'\r')[-4:-1])])
 
     def set_kv(self, data : list):
         try:
@@ -285,7 +371,7 @@ class DBF3003:
         if(len(num) != 1 or len(num[0]) != 3):
             raise ValueError("Water flow data given in incorrect format")
 
-        self.port.write(b'SW:14:' + num[0].encode('ASCII') + b'\r')
+        self.port.write(b'SW:14,' + num[0].encode('ASCII') + b'\r')
         print("Water flow data written to device. Updated values are:")
         self.read_waterflow()
 
