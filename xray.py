@@ -26,6 +26,8 @@ class DBF3003:
 
     # Commands
     def set_port(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
         ports = list(port_list.comports())
         if len(ports) == 0:
             print('No ports avalable. Connect your device and press "Enter" to try again.')
@@ -40,6 +42,8 @@ class DBF3003:
             print("Got invalid port number")
 
     def read_kvma(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
         self.port.write(b'GN\r')
         ans = self.port.read_until(b'\r')[1:-1].split(b':')
         print(f"Setpoint: {int(ans[0])} kV, {int(ans[1])} mA")
@@ -48,6 +52,8 @@ class DBF3003:
         print(f"Actual: {int(ans[0])} kV, {int(ans[1])} mA")
 
     def read_power(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
         self.port.write(b'RP\r')
         print(str(int(self.port.read_until(b'\r')[1:-1])) + " watts")
 
@@ -56,9 +62,7 @@ class DBF3003:
             int(num[0])
         except:
             raise ValueError("Timer number incorrect.")
-        if(len(num) != 1):
-            raise ValueError("Timer number incorrect.")
-        if(len(num[0]) != 1):
+        if(len(num) != 1 or len(num[0]) != 1):
             raise ValueError("Timer number incorrect.")
 
         self.port.write(b'TN:' + num[0].encode("ASCII") + b'\r')
@@ -69,6 +73,8 @@ class DBF3003:
         print(f"Actual: {ans // 3600} h, {(ans % 3600) // 60} m, {ans % 60} s")
 
     def read_material(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
         mat = {
                 1 : 'Ti',
                 2 : 'Cr',
@@ -85,6 +91,8 @@ class DBF3003:
         print(mat[self.port.read_until(b'\r')[1:-1]] + " anode")
 
     def read_focus(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
         foc = {
             1 : "0.15 x 8 mm",
             2 : "0.4 x 8 mm",
@@ -118,6 +126,8 @@ class DBF3003:
         print(f"Elapsed operating hours of current tube: {int(time[:-2])} h {int(int(time[-2:]) * 0.6)} m {int(int(time[-2:]) * 36) // 60} s")
 
     def read_waterflow(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
         self.port.write(b'SR:14\r')
         minflow = int(self.port.read_until(b'\r')[-4:-1])
         self.port.write(b'SR:15\r')
@@ -126,7 +136,31 @@ class DBF3003:
         print(f"Minimum water flow rate: {minflow} Hz")
         print(f"Current water flow rate: {flow} Hz")
 
+    def read_date(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
+        
+        self.port.write("DR\r")
+        ans = self.port.read_until(b'\r')[1:-1].decode()
+        print("No idea how to interpret this, something must be missing in the manual. The answer is:\n" + ans)
+
+    def read_message(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
+        
+        self.port.write(b'ER\r')
+        print(self.port.read_until(b'\r')[1:-1].decode())
+
+    def read_id(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
+        
+        self.port.write(b'ID:\r')
+        print(self.port.read_until(b'\r')[1:-1].decode())
+
     def read_status(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
         st = {"01" : {
                 0 : ["External control disabled", "External control enabled"],
                 1 : ["High voltage OFF", "High voltage OFF"],
@@ -375,6 +409,29 @@ class DBF3003:
         print("Water flow data written to device. Updated values are:")
         self.read_waterflow()
 
+    def set_date(self, data : list):
+        try:
+            data = [str(int(d)).zfill(2).encode("ASCII") for d in data]
+        except:
+            raise ValueError("Date values given in incorrect format")
+        if(len(data) != 6 or [len(d) for d in data] != [2, 2, 2, 2, 2, 2]):
+            raise ValueError("Date values given in incorrect format")
+
+        print("Manual doesn't make sense here, need to investigate")
+        self.port.write(b'DS:' + b','.join(data[:3]) + b';' + b','.join(data[3:]) + b'\r')
+        
+    def set_language(self, data : list):
+        lang = {
+            'deutsch' : b"1",
+            'english' : b"2",
+            'francais' : b"3",
+            'espanol' : b"4"
+        }
+        if(len(data) != 1 or data[0] not in lang):
+            raise ValueError("Incorrect language")
+
+        self.port.write(b'LS:' + lang[data[0]] + b'\r')
+
     def toggle_timer(self, num : list):
         try:
             int(num[1])
@@ -414,6 +471,8 @@ class DBF3003:
 
 
     def cmdstop(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
         # self.port.close()
         exit(0)
 
@@ -429,8 +488,8 @@ class DBF3003:
             'power': set_power,
             'focus': set_focus,
             'material': set_material,
-            'language': 'LS:',
-            'date': 'DS',
+            'language': set_language,
+            'date' : set_date,
             'port': set_port,
             'tube' : set_tube,
             'warmup' : set_warmup,
@@ -439,13 +498,13 @@ class DBF3003:
         'read': {
             'kvma': read_kvma,
             'timer': read_timer,
-            'msg': 'SR:',
+            'msg': read_message,
             'power': read_power,
             'material': read_material,
             'tube' : read_tube,
             'focus' : read_focus,
             'waterflow' : read_waterflow,
-            'date': 'DR'
+            'date': read_date
         },
         'timer': toggle_timer,
         'shutter': toggle_shutter,
@@ -496,8 +555,13 @@ class DBF3003:
                 'week' : None,
                 'RTC' : None
             },
+            'language': {
+                'english' : None,
+                'deutsch' : None,
+                'francais' : None,
+                'espanol' : None,
+            },
             'waterflow' : None,
-            'language': None,
             'tube' : None,
             'date': None,
             'port': None
