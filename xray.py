@@ -10,23 +10,22 @@ class DBF3003:
         commandsVar = self.commands.copy()
         text = [x for x in prompt('', completer = self.completer).strip().split(" ") if len(x) != 0]
             
-        for i in range(len(text)):
-            try:
-                if(text[i] not in commandsVar):
-                    break
-            except:
-                break
-            commandsVar = commandsVar[text[i]]  
-
+        try:
+            for i in range(len(text)+1):
+                commandsVar = commandsVar[text[i]]  
+        except:
+            pass
+        # print(i, text, text[i:])
         if(callable(commandsVar)):
             commandsVar(self, text[i:])
         elif(type(commandsVar) is str):
-            out = commandsVar + ",".join(text[i:]) + '\r'
+            out = commandsVar + ",".join(text[i+1:]) + '\r'
             self.port.write(out.encode('ASCII'))
 
     # Commands
     def set_port(self, empty = []):
         if(len(empty) != 0):
+            print(empty)
             raise ValueError("Command given in incorrect format")
         ports = list(port_list.comports())
         if len(ports) == 0:
@@ -37,7 +36,7 @@ class DBF3003:
         for i in range(len(ports)):
             print(i+1,') ', ports[i], sep='')
         try:
-            self.port = serial.Serial(ports[int(prompt("Input port number"))-1])
+            self.port = serial.Serial(ports[int(prompt("Input port number\n"))-1].device)
         except:
             print("Got invalid port number")
 
@@ -69,7 +68,7 @@ class DBF3003:
         ans = int(self.port.read_until(b'\r')[1:-1])
         print(f"Setpoint: {ans // 3600} h, {(ans % 3600) // 60} m, {ans % 60} s")
         self.port.write(b'TA:' + num[0].encode("ASCII") + b'\r')
-        ans = self.port.read_until(b'\r')[1:-1]
+        ans = int(self.port.read_until(b'\r')[1:-1])
         print(f"Actual: {ans // 3600} h, {(ans % 3600) // 60} m, {ans % 60} s")
 
     def read_material(self, empty = []):
@@ -88,7 +87,7 @@ class DBF3003:
             }
         
         self.port.write(b'RM\r')
-        print(mat[self.port.read_until(b'\r')[1:-1]] + " anode")
+        print(mat[int(self.port.read_until(b'\r')[1:-1])] + " anode")
 
     def read_focus(self, empty = []):
         if(len(empty) != 0):
@@ -112,7 +111,9 @@ class DBF3003:
         self.port.write(b'RF\r')
         print(foc[int(self.port.read_until(b'\r')[1:-1])] + " focus")
 
-    def read_tube(self, data : list):
+    def read_tube(self, empty = []):
+        if(len(empty) != 0):
+            raise ValueError("Command given in incorrect format")
         self.port.write(b'XC:\r')
         num = int(self.port.read_until(b'\r')[1:-1])
         self.port.write(b'WT:\r')
@@ -123,7 +124,7 @@ class DBF3003:
         print(f"Selected tube: {num}")
         # Is remaining warm-up time given in seconds or what?
         print(f"Warm-up time left: {warmup}")
-        print(f"Elapsed operating hours of current tube: {int(time[:-2])} h {int(int(time[-2:]) * 0.6)} m {int(int(time[-2:]) * 36) // 60} s")
+        print(f"Elapsed operating hours of current tube: {int(time[:-2])} h {int(int(time[-2:]) * 0.6)} m {int(int(time[-2:]) * 36) % 60} s")
 
     def read_waterflow(self, empty = []):
         if(len(empty) != 0):
@@ -163,7 +164,7 @@ class DBF3003:
             raise ValueError("Command given in incorrect format")
         st = {"01" : {
                 0 : ["External control disabled", "External control enabled"],
-                1 : ["High voltage OFF", "High voltage OFF"],
+                1 : ["High voltage OFF", "High voltage ON"],
                 2 : ["Cooling circuit OK", "Cooling circuit NOT OK"],
                 3 : ["Buffer battery OK", "Buffer battery EMPTY"],
                 4 : ["mA setpoint = actual", "mA setpoint =/= actual"],
@@ -253,9 +254,9 @@ class DBF3003:
 
         for s in st:
             self.port.write(b'SR:' + s.encode("ASCII") + b'\r')
-            ans = bin(int(self.port.read_until(b'\r')[-4:-1]))[2:]
+            ans = bin(int(self.port.read_until(b'\r')[-4:-1]))[2:].zfill(8)
             for n in st[s]:
-                print(st[s][n][int(ans(n))])
+                print(st[s][n][int(ans[n])])
         
         self.port.write(b'SR:12\r')
         print(sw12[int(self.port.read_until(b'\r')[-4:-1])])
@@ -273,6 +274,7 @@ class DBF3003:
         self.read_kvma()
 
     def set_ma(self, data : list):
+        # print(data)
         try:
             data[0] = str(int(data[0])).zfill(2)
         except:
@@ -301,7 +303,7 @@ class DBF3003:
             data[0] = str(int(data[0])).zfill(4)
         except:
             raise ValueError("W given in incorrect format")
-        if(len(data) != 1 or len(data[0] != 4)):
+        if(len(data) != 1 or len(data[0]) != 4):
             raise ValueError("W given in incorrect format")
 
         self.port.write(b'SP:' + data[0].encode("ASCII") + b'\r')
@@ -374,7 +376,7 @@ class DBF3003:
             raise ValueError("Tube number given in incorrect format")
 
         self.port.write(b'CT:' + num[0].encode("ASCII") + b'\r')
-        print("Tube number selected current values are:")
+        print("Tube number selected. Current values are:")
         self.read_tube()
 
     def set_warmup(self, data : list):
@@ -386,7 +388,7 @@ class DBF3003:
             "rtc" : "4"
         }
         try:
-            data[1] = str(int(data[0])).zfill(2)
+            data[1] = str(int(data[1])).zfill(2)
         except:
             raise ValueError("Warmup data given in incorrect format")
         if(len(data) != 2 or data[0].lower() not in wu or len(data[1]) != 2):
@@ -394,7 +396,7 @@ class DBF3003:
 
         data[0] = wu[data[0].lower()]
         self.port.write(b'WU:' + ",".join(data).encode("ASCII") + b'\r')
-        print("Tube number selected. Current values are:")
+        print("Warm-up time written to device. Current values are:")
         self.read_tube()
 
     def set_waterflow(self, num : list):
@@ -433,6 +435,12 @@ class DBF3003:
         self.port.write(b'LS:' + lang[data[0]] + b'\r')
 
     def toggle_timer(self, num : list):
+        sw03 = {
+            "1" : ["Timer 1 OFF", "Timer 1 ON"],
+            "2" : ["Timer 2 OFF", "Timer 2 ON"],
+            "3" : ["Timer 3 OFF", "Timer 3 ON"],
+            "4" : ["Timer 4 OFF", "Timer 4 ON"]
+        }
         try:
             int(num[1])
         except:
@@ -445,24 +453,32 @@ class DBF3003:
         elif(num[0].lower() == "off"):
             self.port.write(b'TE:' + num[1].encode("ASCII") + b'\r')            
 
+        self.port.write(b'SR:03\r')
+        ans = bin(int(self.port.read_until(b'\r')[-4:-1]))[2:].zfill(8)
+        print(sw03[num[1]][int(ans[int(num[1])-1])])
+
     def toggle_voltage(self, num : list):
+        stv = ["High voltage OFF", "High voltage ON"]
         if(len(num) != 1 or num[0].lower() not in {"on", "off"}):
             print("Error, shutting down voltage for safety:")
             self.port.write(b'HV:0\r')            
-            raise ValueError("Shutter data given in incorrect format")
+            raise ValueError("Voltage data given in incorrect format")
 
         if(num[0].lower() == "on"):
             self.port.write(b'HV:1\r')            
         elif(num[0].lower() == "off"):
-            self.port.write(b'HV:0\r')            
+            self.port.write(b'HV:0\r')
+
+        self.port.write(b'SR:01\r')
+        print(stv[int(bin(int(self.port.read_until(b'\r')[1:-1]))[2:].zfill(8)[1])])
 
     def toggle_shutter(self, num : list):
         try:
             int(num[1])
         except:
-            raise ValueError("Voltage data given in incorrect format")
+            raise ValueError("Shutter data given in incorrect format")
         if(len(num) != 2 or num[0].lower() not in {"open", "close"} or len(num[1]) != 1):
-            raise ValueError("Voltage data given in incorrect format")
+            raise ValueError("Shutter data given in incorrect format")
 
         if(num[0].lower() == "close"):
             self.port.write(b'CS:' + num[1].encode("ASCII") + b'\r')            
@@ -504,13 +520,13 @@ class DBF3003:
             'tube' : read_tube,
             'focus' : read_focus,
             'waterflow' : read_waterflow,
+            'id' : read_id,
             'date': read_date
         },
         'timer': toggle_timer,
         'shutter': toggle_shutter,
         'voltage': toggle_voltage,
         'status' : read_status,
-        'id': 'ID:',
         'stop': cmdstop
     }
 
@@ -595,8 +611,8 @@ class DBF3003:
     })
 
 a = DBF3003()
-try:
-    while True:
+while True:
+    try:
         a.make_command()
-except Exception as e:
-    print(repr(e))
+    except Exception as e:
+        print(repr(e))
