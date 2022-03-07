@@ -1,7 +1,8 @@
 from prompt_toolkit import prompt
 from prompt_toolkit.completion import NestedCompleter
-import serial
-import serial.tools.list_ports as port_list
+from serial import Serial
+from serial.tools.list_ports import comports
+from datetime import datetime
 
 class DBF3003:
     port = None
@@ -27,7 +28,7 @@ class DBF3003:
         if(len(empty) != 0):
             print(empty)
             raise ValueError("Command given in incorrect format")
-        ports = list(port_list.comports())
+        ports = list(comports())
         if len(ports) == 0:
             print('No ports avalable. Connect your device and press "Enter" to try again.')
             input()
@@ -36,7 +37,7 @@ class DBF3003:
         for i in range(len(ports)):
             print(i+1,') ', ports[i], sep='')
         try:
-            self.port = serial.Serial(ports[int(prompt("Input port number\n"))-1].device)
+            self.port = Serial(ports[int(prompt("Input port number\n"))-1].device)
         except:
             print("Got invalid port number")
 
@@ -412,15 +413,22 @@ class DBF3003:
         self.read_waterflow()
 
     def set_date(self, data : list):
-        try:
-            data = [str(int(d)).zfill(2).encode("ASCII") for d in data]
-        except:
-            raise ValueError("Date values given in incorrect format")
-        if(len(data) != 6 or [len(d) for d in data] != [2, 2, 2, 2, 2, 2]):
-            raise ValueError("Date values given in incorrect format")
+        if(len(data) == 1 and data[0].lower() == "current"):
+            now = datetime.now()
+            ans = str(now.day).zfill(2) + "," + str(now.month).zfill(2) + "," + str(now.year%100).zfill(2) + ";" + \
+                str(now.hour).zfill(2) + "," + str(now.minute).zfill(2) + "," + str(now.second).zfill(2)
+        else:
+            try:
+                data = [str(int(d)).zfill(2) for d in data]
+            except:
+                raise ValueError("Date values given in incorrect format")
+            if(len(data) != 6 or [len(d) for d in data] != [2, 2, 2, 2, 2, 2]):
+                raise ValueError("Date values given in incorrect format")
+            ans = ','.join(data[:3]) + ';' + ','.join(data[3:])
+            
 
         print("Manual doesn't make sense here, need to investigate")
-        self.port.write(b'DS:' + b','.join(data[:3]) + b';' + b','.join(data[3:]) + b'\r')
+        self.port.write(b'DS:' + ans.encode("ASCII") + b'\r')
         
     def set_language(self, data : list):
         lang = {
@@ -513,13 +521,13 @@ class DBF3003:
         },
         'read': {
             'kvma': read_kvma,
-            'timer': read_timer,
-            'msg': read_message,
             'power': read_power,
             'material': read_material,
-            'tube' : read_tube,
             'focus' : read_focus,
             'waterflow' : read_waterflow,
+            'tube' : read_tube,
+            'timer': read_timer,
+            'msg': read_message,
             'id' : read_id,
             'date': read_date
         },
@@ -537,7 +545,6 @@ class DBF3003:
             'kvma': None,
             'timer': None,
             'power': None,
-            'focus': None,
             'material': {
                 'Ti': None,
                 'Cr': None,
@@ -579,7 +586,10 @@ class DBF3003:
             },
             'waterflow' : None,
             'tube' : None,
-            'date': None,
+            'date': {
+                'current' : None,
+                'DD MM YY hh mm ss' : None
+            },
             'port': None
         },
         'read': {
@@ -604,9 +614,6 @@ class DBF3003:
             'off' : None
         },
         'status' : None,
-        'date': None,
-        'warm_up': None,
-        'id': None,
         'stop': None
     })
 
