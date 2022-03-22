@@ -1,15 +1,16 @@
-from prompt_toolkit import prompt
+from prompt_toolkit import HTML, prompt
 from prompt_toolkit.completion import NestedCompleter
 from serial import Serial
 from serial.tools.list_ports import comports
 from datetime import datetime
+from random import seed, randint
 
 class DBF3003:
     port = None
 
     def make_command(self):
         commandsVar = self.commands.copy()
-        text = [x for x in prompt('', completer = self.completer).strip().split(" ") if len(x) != 0]
+        text = [x for x in prompt('', completer = self.completer, bottom_toolbar = self.toolbar, refresh_interval=1.0).strip().split(" ") if len(x) != 0]
             
         try:
             for i in range(len(text)+1):
@@ -22,6 +23,14 @@ class DBF3003:
         elif(type(commandsVar) is str):
             out = commandsVar + ",".join(text[i+1:]) + '\r'
             self.port.write(out.encode('ASCII'))
+
+    def toolbar(self):
+        if self.port == None:
+            return HTML('')
+        
+        self.port.write(b'GA\r')
+        ans = self.port.read_until(b'\r')[1:-1].split(b':')
+        return HTML(f"Currently: {int(ans[0])} kV, {int(ans[1])} mA")
 
     # Commands
     def set_port(self, empty = []):
@@ -618,6 +627,7 @@ class DBF3003:
     })
 
 a = DBF3003()
+seed()
 while True:
     try:
         a.make_command()
